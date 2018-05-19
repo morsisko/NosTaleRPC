@@ -2,13 +2,17 @@
 #include <Windows.h>
 #include <iostream>
 #include "discord_rpc.h"
+#include "Structures.h"
 #include <ctime>
 
 FILE *dummyStream;
 const DWORD charInfoAddr = 0x85155C;
+const DWORD timespaceInformationAddr = 0x8515CC;
+const DWORD waveTimerAddr = 0x8515D4;
+const int MAX_ITER = 30;
+int currentIter = MAX_ITER;
 
 static const char* APPLICATION_ID = "445187290210369547";
-int iq = 13;
 
 static void handleDiscordReady(const DiscordUser* connectedUser)
 {
@@ -47,19 +51,25 @@ void Init()
 
 void Update()
 {
+	CharacterInfo* charInfo = *(CharacterInfo**)(charInfoAddr);
+	TimespaceInformation* tsInfo = *(TimespaceInformation**)(timespaceInformationAddr);
+	WaveTimer* waveTimer = *(WaveTimer**)(waveTimerAddr);
 	char buffer[256];
 	DiscordRichPresence discordPresence;
 	memset(&discordPresence, 0, sizeof(discordPresence));
-	discordPresence.state = "Testing RPC";
-	sprintf(buffer, "HoshiIQ: %d", iq);
-	discordPresence.details = buffer;
-	discordPresence.largeImageKey = "32523";
-	discordPresence.largeImageText = "SCHIZO";
-	discordPresence.startTimestamp = time(0);
-	discordPresence.partyId = "party1234";
-	discordPresence.partySize = 1337;
-	discordPresence.partyMax = 2137;
-	discordPresence.instance = 0;
+	//discordPresence.state = "Fight against Gameforge";
+	//discordPresence.details = "To make World better";
+	sprintf(buffer, "%d", charInfo->GetIcon()->GetInformation()->GetId());
+	discordPresence.largeImageKey = buffer;
+	discordPresence.largeImageText = "And the aRT";
+	if (tsInfo->IsInTimespace())
+	{
+		discordPresence.endTimestamp = time(0) + waveTimer->GetTimeToEnd() / 10;
+		discordPresence.details = "In Timespace";
+	}
+	//discordPresence.partyId = "party1234";
+	//discordPresence.partySize = 1337;
+	//discordPresence.partyMax = 2137;
 	Discord_UpdatePresence(&discordPresence);
 }
 
@@ -68,9 +78,15 @@ DWORD WINAPI DLLStart(LPVOID param)
 	Init();
 	while (true)
 	{
-		Update();
-		Discord_RunCallbacks();
-		Sleep(30 * 1000);
+		if (currentIter >= MAX_ITER)
+		{
+			Update();
+			Discord_RunCallbacks();
+			currentIter = 0;
+			std::cout << "Sending update\n";
+		}
+		currentIter++;
+		Sleep(1000);
 	}
 	return 0;
 }

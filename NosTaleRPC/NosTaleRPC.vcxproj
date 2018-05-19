@@ -156,10 +156,12 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Structures.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="discord_register.h" />
     <ClInclude Include="discord_rpc.h" />
+    <ClInclude Include="Structures.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
