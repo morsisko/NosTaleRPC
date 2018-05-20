@@ -4,9 +4,23 @@
 #define CAN_READ_POINTER(x) if(IsBadReadPtr(this, sizeof(x))) return nullptr;
 #define CAN_READ(x) if(IsBadReadPtr(this, sizeof(x))) return -1;
 #define CAN_READ_BOOL(x) if(IsBadReadPtr(this, sizeof(x))) return false;
+#define CAN_READ_CHAR(x) if(IsBadReadPtr(this, sizeof(x))) return DUMMY_TEXT;
 
 // Created with ReClass.NET by KN4CK3R
 // These structures contains only MINIMAL information needed to the RPC
+
+
+class Label
+{
+private:
+	char pad_0000[128]; //0x0000
+	wchar_t* m_pText; //0x0080
+
+public:
+	wchar_t* GetText();
+	bool HasText();
+}; //Size: 0x0084
+
 
 class IconInformation
 {
@@ -33,10 +47,17 @@ class CharacterInfo
 private:
 	char pad_0000[248]; //0x0000
 	PlayerIcon* m_pPlayerIcon; //0x00F8
+	char pad_00FC[24]; //0x00FC
+	Label* m_pNickname; //0x0114
+	Label* m_pLvl; //0x0118
+	Label* m_pAwLvl; //0x011C
 
 public:
 	PlayerIcon* GetIcon();
-}; //Size: 0x00FC
+	Label* GetNickname();
+	Label* GetLvl();
+	Label* GetAwLvl();
+}; //Size: 0x0120
 
 class TimespaceInformation
 {
@@ -57,3 +78,24 @@ private:
 public:
 	int GetTimeToEnd();
 }; //Size: 0x0060
+
+class MiniMap
+{
+private:
+	char pad_0000[196]; //0x0000
+	Label* m_pName; //0x00C4
+	char pad_00C8[888]; //0x00C8
+
+public:
+	Label* GetName();
+}; //Size: 0x0440
+
+class Player
+{
+private:
+	char pad_0000[165]; //0x0000
+	bool m_bIsSitting; //0x00A5
+
+public:
+	bool IsSitting();
+}; //Size: 0x00A6

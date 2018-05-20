@@ -5,14 +5,31 @@
 #include "Structures.h"
 #include <ctime>
 
+BSTR bstr;
 FILE *dummyStream;
 const DWORD charInfoAddr = 0x85155C;
 const DWORD timespaceInformationAddr = 0x8515CC;
 const DWORD waveTimerAddr = 0x8515D4;
+const DWORD mapAddr = 0x851650;
+const DWORD mapIdAddr = 0x6C3858;
+const DWORD playerAddr = 0x851540;
+const DWORD inGameAddr = 0x6C3010; //NostaleClientX.exe+2C2E8C // NostaleClientX.exe+2C2FE8
+
 const int MAX_ITER = 30;
 int currentIter = MAX_ITER;
+char* MASK_ONLY_LVL = "%s - Lvl: %s";
+char* MASK_WITH_AW = "%s - Lvl: %s %s";
+int startTimestamp = 0;
+int endTimestamp = 0;
+int lastMapId = 0;
+bool lastSitState = false;
 
 static const char* APPLICATION_ID = "445187290210369547";
+
+void ConvertToUTF8(wchar_t* in, char* out, int bufferSize = 255)
+{
+	WideCharToMultiByte(CP_UTF8, NULL, in, -1, out, bufferSize, NULL, NULL);
+}
 
 static void handleDiscordReady(const DiscordUser* connectedUser)
 {
@@ -49,27 +66,98 @@ void Init()
 	Discord_Initialize(APPLICATION_ID, &handlers, 0, NULL);
 }
 
+void UpdateTimestamps()
+{
+	TimespaceInformation* tsInfo = *(TimespaceInformation**)(timespaceInformationAddr);
+	Player* player = *(Player**)(playerAddr);
+	int mapId = *(int*)(mapIdAddr);
+
+	std::cout << player << std::endl;
+	std::cout << IsBadReadPtr(player, sizeof(Player));
+
+	if (tsInfo->IsInTimespace())
+	{
+		startTimestamp = 0;
+		WaveTimer* waveTimer = *(WaveTimer**)(waveTimerAddr);
+		endTimestamp = time(0) + waveTimer->GetTimeToEnd() / 10;
+	}
+	else if (mapId != lastMapId)
+	{
+		startTimestamp = time(0);
+		endTimestamp = 0;
+	}
+
+	else if (player->IsSitting() && lastSitState == false)
+	{
+		startTimestamp = time(0);
+		endTimestamp = 0;
+	}
+
+	lastMapId = mapId;
+	lastSitState = player->IsSitting();
+}
+
 void Update()
 {
 	CharacterInfo* charInfo = *(CharacterInfo**)(charInfoAddr);
 	TimespaceInformation* tsInfo = *(TimespaceInformation**)(timespaceInformationAddr);
-	WaveTimer* waveTimer = *(WaveTimer**)(waveTimerAddr);
-	char buffer[256];
+	MiniMap* miniMap = *(MiniMap**)(mapAddr);
+	Player* player = *(Player**)(playerAddr);
+
+	std::cout << player << std::endl;
+	std::cout << IsBadReadPtr(player, sizeof(Player));
+
+	char iconBuffer[256];
+	char charInfoBuffer[256];
+	char mapNameBuffer[256];
+	char unicodeBuffer[256];
+	char lvlBuffer[3];
+	char awBuffer[7];
+	char nickNameBuffer[65];
+
+	ConvertToUTF8(charInfo->GetNickname()->GetText(), nickNameBuffer, 65);
+	ConvertToUTF8(charInfo->GetLvl()->GetText(), lvlBuffer, 3);
+
+
 	DiscordRichPresence discordPresence;
 	memset(&discordPresence, 0, sizeof(discordPresence));
-	//discordPresence.state = "Fight against Gameforge";
-	//discordPresence.details = "To make World better";
-	sprintf(buffer, "%d", charInfo->GetIcon()->GetInformation()->GetId());
-	discordPresence.largeImageKey = buffer;
-	discordPresence.largeImageText = "And the aRT";
-	if (tsInfo->IsInTimespace())
+
+	//SET CURRENT ICON
+	sprintf(iconBuffer, "%d", charInfo->GetIcon()->GetInformation()->GetId());
+	discordPresence.largeImageKey = iconBuffer;
+
+	//SET ICON DESCRIPTION
+	if (charInfo->GetAwLvl()->HasText())
 	{
-		discordPresence.endTimestamp = time(0) + waveTimer->GetTimeToEnd() / 10;
-		discordPresence.details = "In Timespace";
+		ConvertToUTF8(charInfo->GetAwLvl()->GetText(), awBuffer, 7);
+		sprintf(charInfoBuffer, MASK_WITH_AW, nickNameBuffer, lvlBuffer, awBuffer);
 	}
+	else
+		sprintf(charInfoBuffer, MASK_ONLY_LVL, nickNameBuffer, lvlBuffer);
+
+	discordPresence.largeImageText = charInfoBuffer;
+
+
+	//SET CURRENT MAP
+	ConvertToUTF8(miniMap->GetName()->GetText(), unicodeBuffer);
+	discordPresence.details = unicodeBuffer;
+
+	//SET IN TIMESPACE
+	if (*(bool*)(inGameAddr))
+		discordPresence.state = "Logging in";
+	else if (tsInfo->IsInTimespace())
+		discordPresence.state = "In Timespace";
+	else if (player->IsSitting())
+		discordPresence.state = "Idle";
+	else
+		discordPresence.state = "Playing";
+
 	//discordPresence.partyId = "party1234";
 	//discordPresence.partySize = 1337;
 	//discordPresence.partyMax = 2137;
+
+	discordPresence.endTimestamp = endTimestamp;
+	discordPresence.startTimestamp = startTimestamp;
 	Discord_UpdatePresence(&discordPresence);
 }
 
@@ -86,6 +174,7 @@ DWORD WINAPI DLLStart(LPVOID param)
 			std::cout << "Sending update\n";
 		}
 		currentIter++;
+		UpdateTimestamps();
 		Sleep(1000);
 	}
 	return 0;
