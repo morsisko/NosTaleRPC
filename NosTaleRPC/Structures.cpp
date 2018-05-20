@@ -1,6 +1,6 @@
 #include "Structures.h"
 
-wchar_t* DUMMY_TEXT = L"?";
+wchar_t* DUMMY_TEXT = L"???";
 PlayerIcon * CharacterInfo::GetIcon()
 {
 	CAN_READ_POINTER(CharacterInfo);

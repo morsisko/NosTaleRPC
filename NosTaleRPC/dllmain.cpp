@@ -3,6 +3,7 @@
 #include <iostream>
 #include "discord_rpc.h"
 #include "Structures.h"
+#include "SafeRead.h"
 #include <ctime>
 
 BSTR bstr;
@@ -72,9 +73,6 @@ void UpdateTimestamps()
 	Player* player = *(Player**)(playerAddr);
 	int mapId = *(int*)(mapIdAddr);
 
-	std::cout << player << std::endl;
-	std::cout << IsBadReadPtr(player, sizeof(Player));
-
 	if (tsInfo->IsInTimespace())
 	{
 		startTimestamp = 0;
@@ -97,23 +95,31 @@ void UpdateTimestamps()
 	lastSitState = player->IsSitting();
 }
 
+void PrepareForLoginScreen(DiscordRichPresence& discordPresence)
+{
+	discordPresence.largeImageKey = "-1";
+	discordPresence.largeImageText = 0;
+	discordPresence.details = 0;
+	endTimestamp = 0;
+	startTimestamp = 0;
+	discordPresence.state = "Logging in";
+}
+
 void Update()
 {
 	CharacterInfo* charInfo = *(CharacterInfo**)(charInfoAddr);
 	TimespaceInformation* tsInfo = *(TimespaceInformation**)(timespaceInformationAddr);
 	MiniMap* miniMap = *(MiniMap**)(mapAddr);
 	Player* player = *(Player**)(playerAddr);
-
-	std::cout << player << std::endl;
-	std::cout << IsBadReadPtr(player, sizeof(Player));
+	bool isInGame = *(bool*)(inGameAddr);
 
 	char iconBuffer[256];
 	char charInfoBuffer[256];
 	char mapNameBuffer[256];
 	char unicodeBuffer[256];
-	char lvlBuffer[3];
-	char awBuffer[7];
-	char nickNameBuffer[65];
+	char lvlBuffer[4];
+	char awBuffer[8];
+	char nickNameBuffer[66];
 
 	ConvertToUTF8(charInfo->GetNickname()->GetText(), nickNameBuffer, 65);
 	ConvertToUTF8(charInfo->GetLvl()->GetText(), lvlBuffer, 3);
@@ -122,35 +128,40 @@ void Update()
 	DiscordRichPresence discordPresence;
 	memset(&discordPresence, 0, sizeof(discordPresence));
 
-	//SET CURRENT ICON
-	sprintf(iconBuffer, "%d", charInfo->GetIcon()->GetInformation()->GetId());
-	discordPresence.largeImageKey = iconBuffer;
 
-	//SET ICON DESCRIPTION
-	if (charInfo->GetAwLvl()->HasText())
-	{
-		ConvertToUTF8(charInfo->GetAwLvl()->GetText(), awBuffer, 7);
-		sprintf(charInfoBuffer, MASK_WITH_AW, nickNameBuffer, lvlBuffer, awBuffer);
-	}
-	else
-		sprintf(charInfoBuffer, MASK_ONLY_LVL, nickNameBuffer, lvlBuffer);
+	//if (isInGame)
+	//{
+		//SET CURRENT ICON
+		sprintf(iconBuffer, "%d", charInfo->GetIcon()->GetInformation()->GetId());
+		discordPresence.largeImageKey = iconBuffer;
 
-	discordPresence.largeImageText = charInfoBuffer;
+		//SET ICON DESCRIPTION
+		if (charInfo->GetAwLvl()->HasText())
+		{
+			ConvertToUTF8(charInfo->GetAwLvl()->GetText(), awBuffer, 7);
+			sprintf(charInfoBuffer, MASK_WITH_AW, nickNameBuffer, lvlBuffer, awBuffer);
+		}
+		else
+			sprintf(charInfoBuffer, MASK_ONLY_LVL, nickNameBuffer, lvlBuffer);
+
+		discordPresence.largeImageText = charInfoBuffer;
 
 
-	//SET CURRENT MAP
-	ConvertToUTF8(miniMap->GetName()->GetText(), unicodeBuffer);
-	discordPresence.details = unicodeBuffer;
+		//SET CURRENT MAP
+		ConvertToUTF8(miniMap->GetName()->GetText(), unicodeBuffer);
+		discordPresence.details = unicodeBuffer;
 
-	//SET IN TIMESPACE
-	if (*(bool*)(inGameAddr))
-		discordPresence.state = "Logging in";
-	else if (tsInfo->IsInTimespace())
-		discordPresence.state = "In Timespace";
-	else if (player->IsSitting())
-		discordPresence.state = "Idle";
-	else
-		discordPresence.state = "Playing";
+		//SET IN TIMESPACE
+		if (tsInfo->IsInTimespace())
+			discordPresence.state = "In Timespace";
+		else if (player->IsSitting())
+			discordPresence.state = "Idle";
+		else
+			discordPresence.state = "Playing";
+	//}
+	//else
+	//	PrepareForLoginScreen(discordPresence);
+
 
 	//discordPresence.partyId = "party1234";
 	//discordPresence.partySize = 1337;
@@ -163,18 +174,19 @@ void Update()
 
 DWORD WINAPI DLLStart(LPVOID param)
 {
+	SafeRead::Init();
 	Init();
 	while (true)
 	{
+		UpdateTimestamps();
 		if (currentIter >= MAX_ITER)
 		{
 			Update();
-			Discord_RunCallbacks();
 			currentIter = 0;
 			std::cout << "Sending update\n";
 		}
 		currentIter++;
-		UpdateTimestamps();
+		Discord_RunCallbacks();
 		Sleep(1000);
 	}
 	return 0;

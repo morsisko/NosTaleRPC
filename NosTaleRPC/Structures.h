@@ -1,10 +1,11 @@
 #pragma once
 #include <Windows.h>
+#include "SafeRead.h"
 
-#define CAN_READ_POINTER(x) if(IsBadReadPtr(this, sizeof(x))) return nullptr;
-#define CAN_READ(x) if(IsBadReadPtr(this, sizeof(x))) return -1;
-#define CAN_READ_BOOL(x) if(IsBadReadPtr(this, sizeof(x))) return false;
-#define CAN_READ_CHAR(x) if(IsBadReadPtr(this, sizeof(x))) return DUMMY_TEXT;
+#define CAN_READ_POINTER(x) if(!SafeRead::IsInModule(this)) return nullptr;
+#define CAN_READ(x) if(!SafeRead::IsInModule(this)) return -1;
+#define CAN_READ_BOOL(x) if(!SafeRead::IsInModule(this)) return false;
+#define CAN_READ_CHAR(x) if(!SafeRead::IsInModule(this)) return DUMMY_TEXT;
 
 // Created with ReClass.NET by KN4CK3R
 // These structures contains only MINIMAL information needed to the RPC
