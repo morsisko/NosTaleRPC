@@ -4,6 +4,7 @@
 #include "discord_rpc.h"
 #include "Structures.h"
 #include "SafeRead.h"
+#include "detours.h"
 #include <ctime>
 
 BSTR bstr;
@@ -27,9 +28,55 @@ bool lastSitState = false;
 
 static const char* APPLICATION_ID = "445187290210369547";
 
-void ConvertToUTF8(wchar_t* in, char* out, int bufferSize = 255)
+BOOL(WINAPI *oFreeLibrary)(HMODULE hModule);
+FARPROC WINAPI oShowNostaleSplash = NULL;
+FARPROC WINAPI oFreeNostaleSplash = NULL;
+
+extern "C" __declspec(dllexport) void __declspec(naked) ShowNostaleSplash()
 {
-	WideCharToMultiByte(CP_UTF8, NULL, in, -1, out, bufferSize, NULL, NULL);
+	__asm JMP oShowNostaleSplash;
+}
+
+extern "C" __declspec(dllexport) void __declspec(naked) FreeNostaleSplash()
+{
+	__asm JMP oFreeNostaleSplash;
+}
+
+BOOL WINAPI FreeLibrary_HOOK(HMODULE hLibModule)
+{
+	char aLibFileName[MAX_PATH];
+	GetModuleFileNameA(hLibModule, aLibFileName, sizeof(aLibFileName));
+
+	std::cout << "Hello from FreeLibraryHook! The hLibModuleFileNameA is equal to... " << aLibFileName << std::endl;
+
+	if (strstr(aLibFileName, "EWSF.EWS")) {
+		hLibModule = GetModuleHandleA("EWSF.dll");
+	}
+
+	return oFreeLibrary(hLibModule);
+}
+
+void HookDLL()
+{
+	HMODULE hLibModule = LoadLibraryA("EWSF.dll");
+	oShowNostaleSplash = GetProcAddress(hLibModule, "ShowNostaleSplash");
+	oFreeNostaleSplash = GetProcAddress(hLibModule, "FreeNostaleSplash");
+
+	oFreeLibrary = FreeLibrary;
+
+	DetourTransactionBegin();
+	DetourUpdateThread(GetCurrentThread());
+	DetourAttach(&(PVOID&)oFreeLibrary, FreeLibrary_HOOK);
+	DetourTransactionCommit();
+}
+
+void ConvertToUTF8(Label* in, char* out, int bufferSize = 256)
+{
+	int len = in->GetLen() / 2;
+	if (len < 2 || len + 1 >= bufferSize)
+		strcpy(out, "??");
+	else
+		WideCharToMultiByte(CP_UTF8, NULL, in->GetText(), len + 1, out, bufferSize, NULL, NULL);
 }
 
 static void handleDiscordReady(const DiscordUser* connectedUser)
@@ -119,18 +166,18 @@ void Update()
 	char unicodeBuffer[256];
 	char lvlBuffer[4];
 	char awBuffer[8];
-	char nickNameBuffer[66];
+	char nickNameBuffer[65];
 
-	ConvertToUTF8(charInfo->GetNickname()->GetText(), nickNameBuffer, 65);
-	ConvertToUTF8(charInfo->GetLvl()->GetText(), lvlBuffer, 3);
+	ConvertToUTF8(charInfo->GetNickname(), nickNameBuffer, 65);
+	ConvertToUTF8(charInfo->GetLvl(), lvlBuffer, 4);
 
 
 	DiscordRichPresence discordPresence;
 	memset(&discordPresence, 0, sizeof(discordPresence));
 
 
-	//if (isInGame)
-	//{
+	if (isInGame)
+	{
 		//SET CURRENT ICON
 		sprintf(iconBuffer, "%d", charInfo->GetIcon()->GetInformation()->GetId());
 		discordPresence.largeImageKey = iconBuffer;
@@ -138,7 +185,7 @@ void Update()
 		//SET ICON DESCRIPTION
 		if (charInfo->GetAwLvl()->HasText())
 		{
-			ConvertToUTF8(charInfo->GetAwLvl()->GetText(), awBuffer, 7);
+			ConvertToUTF8(charInfo->GetAwLvl(), awBuffer, 8);
 			sprintf(charInfoBuffer, MASK_WITH_AW, nickNameBuffer, lvlBuffer, awBuffer);
 		}
 		else
@@ -148,7 +195,7 @@ void Update()
 
 
 		//SET CURRENT MAP
-		ConvertToUTF8(miniMap->GetName()->GetText(), unicodeBuffer);
+		ConvertToUTF8(miniMap->GetName(), unicodeBuffer);
 		discordPresence.details = unicodeBuffer;
 
 		//SET IN TIMESPACE
@@ -158,9 +205,9 @@ void Update()
 			discordPresence.state = "Idle";
 		else
 			discordPresence.state = "Playing";
-	//}
-	//else
-	//	PrepareForLoginScreen(discordPresence);
+	}
+	else
+		PrepareForLoginScreen(discordPresence);
 
 
 	//discordPresence.partyId = "party1234";
@@ -206,15 +253,21 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 			freopen_s(&dummyStream, "CONOUT$", "wb", stderr);
 			freopen_s(&dummyStream, "CONIN$", "rb", stdin);
 			std::cout << "In DEBUG mode\n";
+			//HookDLL();
+			DisableThreadLibraryCalls(hModule);
 			CreateThread(0, 0, DLLStart, 0, 0, 0);
 			break;
 		}
 		case DLL_THREAD_ATTACH:
 			break;
 		case DLL_THREAD_DETACH:
+		{
+			std::cout << "That case\n";
 			break;
+		}
 		case DLL_PROCESS_DETACH:
 		{
+			std::cout << "Shut down123\n";
 			Discord_Shutdown();
 			std::cout << "Shut down\n";
 			Sleep(5000);

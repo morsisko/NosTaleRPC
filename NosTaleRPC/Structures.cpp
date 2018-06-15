@@ -49,6 +49,14 @@ int WaveTimer::GetTimeToEnd()
 	return m_iTimeToEnd;
 }
 
+int Label::GetLen()
+{
+	if (HasText())
+		return *(int*)(m_pText - 0x2);
+
+	return -1;
+}
+
 wchar_t * Label::GetText()
 {
 	CAN_READ_CHAR(Label);

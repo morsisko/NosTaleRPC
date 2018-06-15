@@ -2,10 +2,10 @@
 #include <Windows.h>
 #include "SafeRead.h"
 
-#define CAN_READ_POINTER(x) if(!SafeRead::IsInModule(this)) return nullptr;
-#define CAN_READ(x) if(!SafeRead::IsInModule(this)) return -1;
-#define CAN_READ_BOOL(x) if(!SafeRead::IsInModule(this)) return false;
-#define CAN_READ_CHAR(x) if(!SafeRead::IsInModule(this)) return DUMMY_TEXT;
+#define CAN_READ_POINTER(x) if(this == NULL || this == nullptr) return nullptr;
+#define CAN_READ(x) if(this == NULL || this == nullptr) return -1;
+#define CAN_READ_BOOL(x) if(this == NULL || this == nullptr) return false;
+#define CAN_READ_CHAR(x) if(this == NULL || this == nullptr) return DUMMY_TEXT;
 
 // Created with ReClass.NET by KN4CK3R
 // These structures contains only MINIMAL information needed to the RPC
@@ -18,6 +18,7 @@ private:
 	wchar_t* m_pText; //0x0080
 
 public:
+	int GetLen();
 	wchar_t* GetText();
 	bool HasText();
 }; //Size: 0x0084
