@@ -1,6 +1,5 @@
 #pragma once
 #include <Windows.h>
-#include "SafeRead.h"
 
 #define CAN_READ_POINTER(x) if(this == NULL || this == nullptr) return nullptr;
 #define CAN_READ(x) if(this == NULL || this == nullptr) return -1;

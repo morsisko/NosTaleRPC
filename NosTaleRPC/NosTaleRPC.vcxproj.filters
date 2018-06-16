@@ -21,7 +21,7 @@
     <ClCompile Include="Structures.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SafeRead.cpp">
+    <ClCompile Include="DataHolder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -35,10 +35,10 @@
     <ClInclude Include="Structures.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SafeRead.h">
+    <ClInclude Include="detours.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="detours.h">
+    <ClInclude Include="DataHolder.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

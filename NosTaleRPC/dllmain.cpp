@@ -2,8 +2,8 @@
 #include <Windows.h>
 #include <iostream>
 #include "discord_rpc.h"
+#include "DataHolder.h"
 #include "Structures.h"
-#include "SafeRead.h"
 #include "detours.h"
 #include <ctime>
 
@@ -19,18 +19,12 @@ const DWORD inGameAddr = 0x6C3010; //NostaleClientX.exe+2C2E8C // NostaleClientX
 
 const int MAX_ITER = 30;
 int currentIter = MAX_ITER;
-char* MASK_ONLY_LVL = "%s - Lvl: %s";
-char* MASK_WITH_AW = "%s - Lvl: %s %s";
-int startTimestamp = 0;
-int endTimestamp = 0;
-int lastMapId = 0;
-bool lastSitState = false;
 
 static const char* APPLICATION_ID = "445187290210369547";
 
 BOOL(WINAPI *oFreeLibrary)(HMODULE hModule);
-FARPROC WINAPI oShowNostaleSplash = NULL;
-FARPROC WINAPI oFreeNostaleSplash = NULL;
+FARPROC oShowNostaleSplash = NULL;
+FARPROC oFreeNostaleSplash = NULL;
 
 extern "C" __declspec(dllexport) void __declspec(naked) ShowNostaleSplash()
 {
@@ -72,6 +66,7 @@ void HookDLL()
 
 void ConvertToUTF8(Label* in, char* out, int bufferSize = 256)
 {
+	memset(out, 0, bufferSize);
 	int len = in->GetLen() / 2;
 	if (len < 2 || len + 1 >= bufferSize)
 		strcpy(out, "??");
@@ -122,34 +117,13 @@ void UpdateTimestamps()
 
 	if (tsInfo->IsInTimespace())
 	{
-		startTimestamp = 0;
 		WaveTimer* waveTimer = *(WaveTimer**)(waveTimerAddr);
-		endTimestamp = time(0) + waveTimer->GetTimeToEnd() / 10;
+		DataHolder::GetInstance().SetTimeToEnd(waveTimer->GetTimeToEnd() / 10);
 	}
-	else if (mapId != lastMapId)
+	else if (DataHolder::GetInstance().WasMapChanged(mapId))
 	{
-		startTimestamp = time(0);
-		endTimestamp = 0;
+		DataHolder::GetInstance().ResetTimestamps();
 	}
-
-	else if (player->IsSitting() && lastSitState == false)
-	{
-		startTimestamp = time(0);
-		endTimestamp = 0;
-	}
-
-	lastMapId = mapId;
-	lastSitState = player->IsSitting();
-}
-
-void PrepareForLoginScreen(DiscordRichPresence& discordPresence)
-{
-	discordPresence.largeImageKey = "-1";
-	discordPresence.largeImageText = 0;
-	discordPresence.details = 0;
-	endTimestamp = 0;
-	startTimestamp = 0;
-	discordPresence.state = "Logging in";
 }
 
 void Update()
@@ -160,68 +134,41 @@ void Update()
 	Player* player = *(Player**)(playerAddr);
 	bool isInGame = *(bool*)(inGameAddr);
 
-	char iconBuffer[256];
-	char charInfoBuffer[256];
-	char mapNameBuffer[256];
-	char unicodeBuffer[256];
-	char lvlBuffer[4];
-	char awBuffer[8];
-	char nickNameBuffer[65];
+	char buffer[256];
 
-	ConvertToUTF8(charInfo->GetNickname(), nickNameBuffer, 65);
-	ConvertToUTF8(charInfo->GetLvl(), lvlBuffer, 4);
+	ConvertToUTF8(charInfo->GetNickname(), buffer);
+	DataHolder::GetInstance().SetNickname(buffer);
 
-
-	DiscordRichPresence discordPresence;
-	memset(&discordPresence, 0, sizeof(discordPresence));
-
+	ConvertToUTF8(charInfo->GetLvl(), buffer);
+	DataHolder::GetInstance().SetLevel(buffer);
 
 	if (isInGame)
 	{
 		//SET CURRENT ICON
-		sprintf(iconBuffer, "%d", charInfo->GetIcon()->GetInformation()->GetId());
-		discordPresence.largeImageKey = iconBuffer;
-
-		//SET ICON DESCRIPTION
-		if (charInfo->GetAwLvl()->HasText())
-		{
-			ConvertToUTF8(charInfo->GetAwLvl(), awBuffer, 8);
-			sprintf(charInfoBuffer, MASK_WITH_AW, nickNameBuffer, lvlBuffer, awBuffer);
-		}
-		else
-			sprintf(charInfoBuffer, MASK_ONLY_LVL, nickNameBuffer, lvlBuffer);
-
-		discordPresence.largeImageText = charInfoBuffer;
+		DataHolder::GetInstance().SetIconId(charInfo->GetIcon()->GetInformation()->GetId());
 
 
 		//SET CURRENT MAP
-		ConvertToUTF8(miniMap->GetName(), unicodeBuffer);
-		discordPresence.details = unicodeBuffer;
+		ConvertToUTF8(miniMap->GetName(), buffer);
+		DataHolder::GetInstance().SetMapName(buffer);
 
 		//SET IN TIMESPACE
 		if (tsInfo->IsInTimespace())
-			discordPresence.state = "In Timespace";
+			DataHolder::GetInstance().SetState(GameState::TIME_SPACE);
 		else if (player->IsSitting())
-			discordPresence.state = "Idle";
+			DataHolder::GetInstance().SetState(GameState::IDLE);
 		else
-			discordPresence.state = "Playing";
+			DataHolder::GetInstance().SetState(GameState::REGULAR_GAMEPLAY);
 	}
 	else
-		PrepareForLoginScreen(discordPresence);
+		DataHolder::GetInstance().SetState(GameState::LOGIN_SCREEN);
 
-
-	//discordPresence.partyId = "party1234";
-	//discordPresence.partySize = 1337;
-	//discordPresence.partyMax = 2137;
-
-	discordPresence.endTimestamp = endTimestamp;
-	discordPresence.startTimestamp = startTimestamp;
+	DiscordRichPresence discordPresence = DataHolder::GetInstance().Craft();
 	Discord_UpdatePresence(&discordPresence);
 }
 
 DWORD WINAPI DLLStart(LPVOID param)
 {
-	SafeRead::Init();
 	Init();
 	while (true)
 	{
