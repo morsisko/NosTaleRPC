@@ -100,10 +100,13 @@ DiscordRichPresence DataHolder::Craft()
 	DiscordRichPresence rpc;
 	std::memset(&rpc, 0, sizeof(rpc));
 
-	std::stringstream ss;
-	ss << nickname << " - Lvl: " << level << " " << awLevel;
+	if (currentState != GameState::LOGIN_SCREEN)
+	{
+		std::stringstream ss;
+		ss << nickname << " - Lvl: " << level << " " << awLevel;
 
-	largeImageText = ss.str();
+		largeImageText = ss.str();
+	}
 
 	rpc.largeImageKey = largeImageKey.data();
 	rpc.largeImageText = largeImageText.data();

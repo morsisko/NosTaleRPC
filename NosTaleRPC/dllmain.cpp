@@ -114,16 +114,25 @@ void UpdateTimestamps()
 	TimespaceInformation* tsInfo = *(TimespaceInformation**)(timespaceInformationAddr);
 	Player* player = *(Player**)(playerAddr);
 	int mapId = *(int*)(mapIdAddr);
+	bool isInGame = *(bool*)(inGameAddr);
 
-	if (tsInfo->IsInTimespace())
+	if (!isInGame)
+		DataHolder::GetInstance().SetState(GameState::LOGIN_SCREEN);
+
+	else if (tsInfo->IsInTimespace())
 	{
 		WaveTimer* waveTimer = *(WaveTimer**)(waveTimerAddr);
+		DataHolder::GetInstance().SetState(GameState::TIME_SPACE);
 		DataHolder::GetInstance().SetTimeToEnd(waveTimer->GetTimeToEnd() / 10);
 	}
 	else if (DataHolder::GetInstance().WasMapChanged(mapId))
-	{
 		DataHolder::GetInstance().ResetTimestamps();
-	}
+
+	else if (player->IsSitting())
+		DataHolder::GetInstance().SetState(GameState::IDLE);
+
+	else
+		DataHolder::GetInstance().SetState(GameState::REGULAR_GAMEPLAY);
 }
 
 void Update()
@@ -144,24 +153,11 @@ void Update()
 
 	if (isInGame)
 	{
-		//SET CURRENT ICON
 		DataHolder::GetInstance().SetIconId(charInfo->GetIcon()->GetInformation()->GetId());
 
-
-		//SET CURRENT MAP
 		ConvertToUTF8(miniMap->GetName(), buffer);
 		DataHolder::GetInstance().SetMapName(buffer);
-
-		//SET IN TIMESPACE
-		if (tsInfo->IsInTimespace())
-			DataHolder::GetInstance().SetState(GameState::TIME_SPACE);
-		else if (player->IsSitting())
-			DataHolder::GetInstance().SetState(GameState::IDLE);
-		else
-			DataHolder::GetInstance().SetState(GameState::REGULAR_GAMEPLAY);
 	}
-	else
-		DataHolder::GetInstance().SetState(GameState::LOGIN_SCREEN);
 
 	DiscordRichPresence discordPresence = DataHolder::GetInstance().Craft();
 	Discord_UpdatePresence(&discordPresence);
@@ -209,15 +205,14 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 			break;
 		case DLL_THREAD_DETACH:
 		{
-			std::cout << "That case\n";
 			break;
 		}
 		case DLL_PROCESS_DETACH:
 		{
-			std::cout << "Shut down123\n";
-			Discord_Shutdown();
-			std::cout << "Shut down\n";
-			Sleep(5000);
+			//std::cout << "Shut down123\n";
+			//Discord_Shutdown();
+			//std::cout << "Shut down\n";
+			//Sleep(5000);
 			break;
 		}
 	}
